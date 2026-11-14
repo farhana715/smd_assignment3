@@ -15,6 +15,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
 
 import com.example.myapplication.databinding.ActivityHomeBinding;
 
@@ -24,7 +25,7 @@ import java.util.List;
 public class HomeActivity extends AppCompatActivity
 {
     private ActivityHomeBinding binding;
-    private ProjectListAdapter  projectListAdapter;
+    private ProjectAdapter      projectAdapter;
 
     /** Master list — NEVER cleared by adapter operations */
     private final List<Project> projectList = new ArrayList<>();
@@ -68,43 +69,24 @@ public class HomeActivity extends AppCompatActivity
         binding = ActivityHomeBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        setupListView();
+        setupRecyclerView();
         loadSampleProject();
         setupSearch();
 
         binding.btnNewProject.setOnClickListener(v -> showAddProjectDialog());
     }
 
-    // ---- ListView setup ----
-    private void setupListView()
+    // ---- RecyclerView setup ----
+    private void setupRecyclerView()
     {
-        // IMPORTANT: pass a NEW empty list — the adapter owns its own display list,
-        // separate from projectList (the master list). This prevents clear() from
-        // wiping projectList.
-        projectListAdapter = new ProjectListAdapter(this, new ArrayList<>());
-        binding.lvProjects.setAdapter(projectListAdapter);
-
-        binding.lvProjects.setOnItemClickListener((parent, view, position, id) ->
+        projectAdapter = new ProjectAdapter(project ->
         {
-            Project project = projectListAdapter.getItem(position);
-            if (project == null) return;
-
-            // Find position in MASTER list by ID (safe even when filtered)
-            int masterPosition = -1;
-            for (int i = 0; i < projectList.size(); i++)
-            {
-                if (projectList.get(i).getId() == project.getId())
-                {
-                    masterPosition = i;
-                    break;
-                }
-            }
-
             Intent intent = new Intent(HomeActivity.this, ProjectActivity.class);
             intent.putExtra(ProjectActivity.EXTRA_PROJECT, project);
-            intent.putExtra(ProjectActivity.EXTRA_PROJECT_POSITION, masterPosition);
             projectLauncher.launch(intent);
         });
+        binding.rvProjects.setLayoutManager(new LinearLayoutManager(this));
+        binding.rvProjects.setAdapter(projectAdapter);
     }
 
     // ---- Search ----
@@ -125,13 +107,14 @@ public class HomeActivity extends AppCompatActivity
     /**
      * Rebuilds the adapter's display list from projectList (master).
      * projectList is NEVER modified here — only the adapter's internal list is.
+     * Uses submitList() — never notifyDataSetChanged().
      */
     private void filterProjects(String query)
     {
-        projectListAdapter.clear();             // clears adapter's OWN list, NOT projectList
+        List<Project> filtered = new ArrayList<>();
         if (query.isEmpty())
         {
-            projectListAdapter.addAll(projectList); // copies references into adapter list
+            filtered.addAll(projectList);
         }
         else
         {
@@ -140,10 +123,10 @@ public class HomeActivity extends AppCompatActivity
             {
                 if (p.getName().toLowerCase().contains(lower) ||
                     p.getTag().toLowerCase().contains(lower))
-                    projectListAdapter.add(p);
+                    filtered.add(p);
             }
         }
-        projectListAdapter.notifyDataSetChanged();
+        projectAdapter.submitList(new ArrayList<>(filtered));
     }
 
     // ---- Sample data ----

@@ -4,26 +4,64 @@ import android.view.LayoutInflater;
 import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.DiffUtil;
+import androidx.recyclerview.widget.ListAdapter;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.myapplication.databinding.ItemProjectBinding;
 
-import java.util.List;
+/**
+ * ProjectAdapter – ListAdapter<Project, ProjectViewHolder> using DiffUtil.
+ * Replaces the old ProjectListAdapter (ArrayAdapter) for the HomeActivity RecyclerView.
+ * Never calls notifyDataSetChanged(); uses submitList() instead.
+ */
+public class ProjectAdapter extends ListAdapter<Project, ProjectAdapter.ProjectViewHolder>
+{
+    // ---- DiffUtil callback -----------------------------------------------
 
-public class ProjectAdapter extends RecyclerView.Adapter<ProjectAdapter.ProjectViewHolder> {
+    private static final DiffUtil.ItemCallback<Project> DIFF =
+            new DiffUtil.ItemCallback<Project>()
+            {
+                @Override
+                public boolean areItemsTheSame(@NonNull Project a, @NonNull Project b)
+                {
+                    return a.getId() == b.getId();
+                }
 
-    public interface OnProjectClickListener {
-        void onProjectClick(Project project, int position);
+                @Override
+                public boolean areContentsTheSame(@NonNull Project a, @NonNull Project b)
+                {
+                    return a.getName().equals(b.getName())
+                            && a.getTag().equals(b.getTag())
+                            && a.getDescription().equals(b.getDescription())
+                            && a.getProgressPercent() == b.getProgressPercent()
+                            && a.getTaskCount()       == b.getTaskCount()
+                            && a.getCompletedTaskCount() == b.getCompletedTaskCount()
+                            && a.getAttachmentLinkCount() == b.getAttachmentLinkCount()
+                            && a.getCommentCount()    == b.getCommentCount();
+                }
+            };
+
+    // ---- Click listener interface -----------------------------------------
+
+    public interface OnProjectClickListener
+    {
+        void onProjectClick(Project project);
     }
 
-    private final List<Project> projectList;
+    // ---- Fields -----------------------------------------------------------
+
     private final OnProjectClickListener listener;
 
-    public ProjectAdapter(List<Project> projectList, OnProjectClickListener listener)
+    // ---- Constructor ------------------------------------------------------
+
+    public ProjectAdapter(OnProjectClickListener listener)
     {
-        this.projectList = projectList;
+        super(DIFF);
         this.listener = listener;
     }
+
+    // ---- RecyclerView.Adapter overrides ------------------------------------
 
     @NonNull
     @Override
@@ -37,54 +75,44 @@ public class ProjectAdapter extends RecyclerView.Adapter<ProjectAdapter.ProjectV
     @Override
     public void onBindViewHolder(@NonNull ProjectViewHolder holder, int position)
     {
-        holder.bind(projectList.get(position), position);
+        holder.bind(getItem(position));
     }
 
-    @Override
-    public int getItemCount() {
-        return projectList.size();
-    }
-
-    public void addProject(Project project)
-    {
-        projectList.add(project);
-        notifyItemInserted(projectList.size() - 1);
-    }
-
-    public void updateProject(int position, Project updatedProject)
-    {
-        projectList.set(position, updatedProject);
-        notifyItemChanged(position);
-    }
+    // ---- ViewHolder -------------------------------------------------------
 
     class ProjectViewHolder extends RecyclerView.ViewHolder
     {
-
         private final ItemProjectBinding binding;
 
         ProjectViewHolder(ItemProjectBinding binding)
         {
             super(binding.getRoot());
-
             this.binding = binding;
         }
 
-        void bind(Project project, int position)
+        void bind(Project project)
         {
             binding.tvProjectTag.setText(project.getTag());
             binding.tvProjectName.setText(project.getName());
             binding.tvProjectDescription.setText(project.getDescription());
 
-            int attachCount = project.getAttachmentName().isEmpty() ? 0 : 1;
-            binding.tvAttachmentCount.setText("📎 " + attachCount + " Attachment");
+            int progress = project.getProgressPercent();
+            binding.pbProject.setProgress(progress);
+            binding.tvProgressPercent.setText(progress + "%");
 
             binding.tvTaskCount.setText(
-                    " " + project.getCompletedTaskCount() + "/" + project.getTaskCount());
-            binding.tvCommentCount.setText("💬 " + project.getCommentCount() + " Comment");
+                    project.getCompletedTaskCount() + "/" + project.getTaskCount());
 
-            binding.getRoot().setOnClickListener(v -> listener.onProjectClick(project, position));
+            int attachCount = project.getAttachmentLinkCount();
+            binding.tvAttachmentCount.setText("📎 " + attachCount);
+            binding.tvCommentCount.setText("💬 " + project.getCommentCount());
 
             binding.btnInvite.setEnabled(false);
+
+            binding.getRoot().setOnClickListener(v ->
+            {
+                if (listener != null) listener.onProjectClick(project);
+            });
         }
     }
 }
