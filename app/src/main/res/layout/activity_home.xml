@@ -158,13 +158,12 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Scrollable project ListView (must NOT be inside ScrollView) -->
-    <ListView
-        android:id="@+id/lv_projects"
+    <!-- Scrollable project RecyclerView (must NOT be inside ScrollView) -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_projects"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:divider="@null"
         android:paddingStart="20dp"
         android:paddingEnd="20dp"
         android:paddingTop="8dp"

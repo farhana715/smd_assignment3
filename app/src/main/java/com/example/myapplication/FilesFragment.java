@@ -17,6 +17,9 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.ItemTouchHelper;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.myapplication.databinding.FragmentFilesBinding;
 
@@ -24,17 +27,17 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
-public class FilesFragment extends Fragment implements FileListAdapter.FileActionListener
+public class FilesFragment extends Fragment
 {
     private static final String ARG_PROJECT_ID = "project_id";
 
     private FragmentFilesBinding binding;
     private OverviewFragment.ProjectHost host;
-    private FileListAdapter fileListAdapter;
+    private AttachmentAdapter attachmentAdapter;
     private final List<AttachmentLink> displayedFiles = new ArrayList<>();
 
-    private String searchQuery  = "";
-    private String typeFilter   = "All"; // All / Images / Text
+    private String searchQuery = "";
+    private String typeFilter  = "All"; // All / Images / Text
 
     public static FilesFragment newInstance(int projectId)
     {
@@ -68,9 +71,7 @@ public class FilesFragment extends Fragment implements FileListAdapter.FileActio
     {
         super.onViewCreated(view, savedInstanceState);
 
-        fileListAdapter = new FileListAdapter(requireContext(), displayedFiles, this);
-        binding.lvFiles.setAdapter(fileListAdapter);
-
+        setupRecyclerView();
         setupSearch();
         setupChips();
         applyFilters();
@@ -84,6 +85,52 @@ public class FilesFragment extends Fragment implements FileListAdapter.FileActio
     {
         super.onResume();
         applyFilters();
+    }
+
+    private void setupRecyclerView()
+    {
+        attachmentAdapter = new AttachmentAdapter(displayedFiles, new AttachmentAdapter.FileActionListener()
+        {
+            @Override
+            public void onPreview(AttachmentLink link)
+            {
+                FilesFragment.this.onPreview(link);
+            }
+
+            @Override
+            public void onRemove(AttachmentLink link, int adapterPosition)
+            {
+                FilesFragment.this.showRemoveDialog(link, adapterPosition);
+            }
+        });
+
+        binding.rvFiles.setLayoutManager(new LinearLayoutManager(requireContext()));
+        binding.rvFiles.setAdapter(attachmentAdapter);
+
+        // ItemTouchHelper: Swipe RIGHT = remove with name-confirmation
+        ItemTouchHelper.SimpleCallback callback = new ItemTouchHelper.SimpleCallback(
+                0, ItemTouchHelper.RIGHT)
+        {
+            @Override
+            public boolean onMove(@NonNull RecyclerView rv,
+                                  @NonNull RecyclerView.ViewHolder from,
+                                  @NonNull RecyclerView.ViewHolder to) { return false; }
+
+            @Override
+            public void onSwiped(@NonNull RecyclerView.ViewHolder vh, int direction)
+            {
+                int position = vh.getBindingAdapterPosition();
+                if (position < 0 || position >= displayedFiles.size())
+                {
+                    attachmentAdapter.notifyItemChanged(position);
+                    return;
+                }
+                AttachmentLink link = displayedFiles.get(position);
+                showRemoveDialog(link, position);
+            }
+        };
+
+        new ItemTouchHelper(callback).attachToRecyclerView(binding.rvFiles);
     }
 
     private void setupSearch()
@@ -150,7 +197,7 @@ public class FilesFragment extends Fragment implements FileListAdapter.FileActio
 
         displayedFiles.clear();
         displayedFiles.addAll(filtered);
-        fileListAdapter.notifyDataSetChanged();
+        attachmentAdapter.notifyDataSetChanged();
 
         // Update chip labels with total counts
         int totalAll    = all.size();
@@ -170,29 +217,25 @@ public class FilesFragment extends Fragment implements FileListAdapter.FileActio
         {
             binding.llEmptyNoFiles.setVisibility(View.VISIBLE);
             binding.tvEmptyNoFileMatch.setVisibility(View.GONE);
-            binding.lvFiles.setVisibility(View.GONE);
+            binding.rvFiles.setVisibility(View.GONE);
         }
         else if (filtered.isEmpty())
         {
             binding.llEmptyNoFiles.setVisibility(View.GONE);
             binding.tvEmptyNoFileMatch.setVisibility(View.VISIBLE);
-            binding.lvFiles.setVisibility(View.GONE);
+            binding.rvFiles.setVisibility(View.GONE);
         }
         else
         {
             binding.llEmptyNoFiles.setVisibility(View.GONE);
             binding.tvEmptyNoFileMatch.setVisibility(View.GONE);
-            binding.lvFiles.setVisibility(View.VISIBLE);
+            binding.rvFiles.setVisibility(View.VISIBLE);
         }
     }
 
     // ---- Preview ----
-    @Override
-    public void onPreview(AttachmentLink link)
+    private void onPreview(AttachmentLink link)
     {
-        View dialogView = LayoutInflater.from(requireContext())
-                .inflate(android.R.layout.activity_list_item, null);
-
         AlertDialog.Builder builder = new AlertDialog.Builder(requireContext())
                 .setTitle(link.getDisplayName())
                 .setPositiveButton("Close", null);
@@ -236,9 +279,8 @@ public class FilesFragment extends Fragment implements FileListAdapter.FileActio
         builder.show();
     }
 
-    // ---- Remove ----
-    @Override
-    public void onRemove(AttachmentLink link, int position)
+    // ---- Remove (name-confirmation dialog) ----
+    private void showRemoveDialog(AttachmentLink link, int adapterPosition)
     {
         EditText etConfirm = new EditText(requireContext());
         etConfirm.setHint("Type \"" + link.getDisplayName() + "\" to confirm");
@@ -252,7 +294,8 @@ public class FilesFragment extends Fragment implements FileListAdapter.FileActio
                     String typed = etConfirm.getText().toString().trim();
                     if (!typed.equals(link.getDisplayName()))
                     {
-                        Toast.makeText(requireContext(), "Name doesn't match!", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(requireContext(), "Name doesn't match", Toast.LENGTH_SHORT).show();
+                        attachmentAdapter.notifyItemChanged(adapterPosition);
                         return;
                     }
                     host.getProject().getAttachmentLinks().remove(link);
@@ -260,7 +303,10 @@ public class FilesFragment extends Fragment implements FileListAdapter.FileActio
                     applyFilters();
                     Toast.makeText(requireContext(), "Attachment removed", Toast.LENGTH_SHORT).show();
                 })
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton("Cancel", (d, w) ->
+                        attachmentAdapter.notifyItemChanged(adapterPosition))
+                .setOnCancelListener(d ->
+                        attachmentAdapter.notifyItemChanged(adapterPosition))
                 .show();
     }
 
